@@ -1,78 +1,115 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <title>Semester Chat</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Discussion Chat</title>
   <style>
-    body { margin:0; font-family: Arial; display:flex; flex-direction:column; height:100vh; }
-    header { background:#0b74ff; color:#fff; padding:10px; text-align:center; font-weight:bold; }
-    #messages { flex:1; padding:10px; overflow-y:auto; background:#f5f6fa; display:flex; flex-direction:column; }
-    .msg { margin:6px 0; padding:8px 12px; border-radius:12px; max-width:70%; word-wrap:break-word; }
-    .mine { background:#d1e7ff; align-self:flex-end; }
-    .other { background:#fff; border:1px solid #ddd; align-self:flex-start; }
-    footer { display:flex; padding:8px; background:#fff; border-top:1px solid #ccc; }
-    input { flex:1; padding:10px; border:1px solid #ccc; border-radius:8px; }
-    button { margin-left:8px; background:#0b74ff; color:#fff; border:none; padding:10px 16px; border-radius:8px; cursor:pointer; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f9f9f9; }
+    .container { max-width: 500px; margin: auto; padding: 10px; }
+    #login, #chat { display: none; }
+    #chatBox { border: 1px solid #ccc; height: 400px; overflow-y: auto; padding: 10px; background: #fff; }
+    .message { padding: 6px; margin-bottom: 6px; border-radius: 6px; }
+    .me { background: #d1ffd6; text-align: right; }
+    .other { background: #f0f0f0; text-align: left; }
+    .system { font-size: 12px; text-align: center; color: #777; }
+    input, button { padding: 10px; width: 100%; margin-top: 6px; border-radius: 6px; border: 1px solid #ccc; }
+    button { background: #4CAF50; color: white; font-weight: bold; cursor: pointer; }
+    button:hover { background: #45a049; }
   </style>
 </head>
 <body>
-  <header id="roomTitle">Semester Chat</header>
-  <div id="messages"></div>
-  <footer>
-    <input id="msgBox" placeholder="Type a message..."/>
-    <button onclick="sendMessage()">Send</button>
-  </footer>
+  <div class="container">
+    <!-- Login -->
+    <div id="login">
+      <h2>Join Discussion</h2>
+      <input type="text" id="name" placeholder="Enter your name" required />
+      <input type="text" id="sem" placeholder="Enter your semester" required />
+      <button onclick="joinChat()">Join</button>
+    </div>
 
-  <!-- Firebase SDK -->
+    <!-- Chat -->
+    <div id="chat">
+      <h2>Live Discussion</h2>
+      <div id="chatBox"></div>
+      <input type="text" id="message" placeholder="Type your message..." onkeypress="if(event.key==='Enter'){sendMessage();}" />
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
   <script type="module">
-    // 🔹 Replace with your Firebase project config
+    // Import Firebase SDK
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import { getDatabase, ref, push, onChildAdded } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+
+    // ✅ Your Firebase Config
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT.firebaseapp.com",
-      databaseURL: "https://YOUR_PROJECT.firebaseio.com", // must be enabled in Firebase console
-      projectId: "YOUR_PROJECT"
+      apiKey: "AIzaSyCLUGoYW3z_BL-jufmEOrN40HLPPUHMKSI",
+      authDomain: "chat-discussion-b5009.firebaseapp.com",
+      databaseURL: "https://chat-discussion-b5009-default-rtdb.firebaseio.com", 
+      projectId: "chat-discussion-b5009",
+      storageBucket: "chat-discussion-b5009.appspot.com",
+      messagingSenderId: "436514400897",
+      appId: "1:436514400897:web:e46d989a6971690470fb80"
     };
 
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, push, onChildAdded, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-
+    // Init Firebase
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // 🎓 Semester = chat room name
-    const sem = localStorage.getItem("semester") || "Anonymous";
-    document.getElementById("roomTitle").innerText = sem + " Discussion";
+    let user = {};
 
-    // 🎓 Unique ID for this user (so we know which messages are "mine")
-    const myId = "user_" + Math.random().toString(36).substring(2,10);
+    // Join Chat
+    window.joinChat = function() {
+      const name = document.getElementById("name").value;
+      const sem = document.getElementById("sem").value;
+      if (!name || !sem) return alert("Enter name & semester");
 
-    const msgRef = ref(db, "chats/" + sem);
-    const messagesEl = document.getElementById("messages");
-    const msgBox = document.getElementById("msgBox");
+      user = { name, sem };
 
-    // ✅ Listen for new messages (everyone in the room sees them live)
-    onChildAdded(msgRef, snap => {
-      const data = snap.val();
-      const div = document.createElement("div");
-      div.className = "msg " + (data.senderId === myId ? "mine" : "other");
-      div.innerHTML = `<b>${data.sender}:</b> ${data.text}`;
-      messagesEl.appendChild(div);
-      messagesEl.scrollTop = messagesEl.scrollHeight; // auto scroll
-    });
+      document.getElementById("login").style.display = "none";
+      document.getElementById("chat").style.display = "block";
 
-    // ✅ Send new message
-    function sendMessage(){
-      let text = msgBox.value.trim();
-      if(!text) return;
-      push(msgRef, {
-        senderId: myId,
-        sender: sem, // default name = semester
-        text: text,
-        time: serverTimestamp()
+      // Notify join
+      push(ref(db, "messages"), {
+        name: "System",
+        sem: "-",
+        text: `👋 ${name} (Sem-${sem}) joined the chat`
       });
-      msgBox.value = "";
-    }
-    window.sendMessage = sendMessage;
+    };
+
+    // Send Message
+    window.sendMessage = function() {
+      const msg = document.getElementById("message").value;
+      if (!msg) return;
+      push(ref(db, "messages"), {
+        name: user.name,
+        sem: user.sem,
+        text: msg
+      });
+      document.getElementById("message").value = "";
+    };
+
+    // Listen for new messages
+    const messagesRef = ref(db, "messages");
+    onChildAdded(messagesRef, (snapshot) => {
+      const data = snapshot.val();
+      const chatBox = document.getElementById("chatBox");
+      const div = document.createElement("div");
+
+      if (data.name === "System") {
+        div.classList.add("system");
+        div.innerHTML = data.text;
+      } else {
+        div.classList.add("message");
+        div.classList.add(data.name === user.name ? "me" : "other");
+        div.innerHTML = `<b>${data.name} (Sem-${data.sem}):</b> ${data.text}`;
+      }
+
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    });
   </script>
 </body>
 </html>
