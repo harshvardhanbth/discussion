@@ -1,115 +1,328 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Live Discussion Chat</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f9f9f9; }
-    .container { max-width: 500px; margin: auto; padding: 10px; }
-    #login, #chat { display: none; }
-    #chatBox { border: 1px solid #ccc; height: 400px; overflow-y: auto; padding: 10px; background: #fff; }
-    .message { padding: 6px; margin-bottom: 6px; border-radius: 6px; }
-    .me { background: #d1ffd6; text-align: right; }
-    .other { background: #f0f0f0; text-align: left; }
-    .system { font-size: 12px; text-align: center; color: #777; }
-    input, button { padding: 10px; width: 100%; margin-top: 6px; border-radius: 6px; border: 1px solid #ccc; }
-    button { background: #4CAF50; color: white; font-weight: bold; cursor: pointer; }
-    button:hover { background: #45a049; }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Chat App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <div class="container">
-    <!-- Login -->
-    <div id="login">
-      <h2>Join Discussion</h2>
-      <input type="text" id="name" placeholder="Enter your name" required />
-      <input type="text" id="sem" placeholder="Enter your semester" required />
-      <button onclick="joinChat()">Join</button>
-    </div>
+<body class="bg-gray-100 flex flex-col h-screen">
 
-    <!-- Chat -->
-    <div id="chat">
-      <h2>Live Discussion</h2>
-      <div id="chatBox"></div>
-      <input type="text" id="message" placeholder="Type your message..." onkeypress="if(event.key==='Enter'){sendMessage();}" />
-      <button onclick="sendMessage()">Send</button>
-    </div>
-  </div>
+  <!-- Header -->
+  <header class="bg-blue-600 text-white p-4 text-center text-xl font-bold shadow">
+    💬 Live Discussion Group
+  </header>
 
-  <!-- Firebase SDK -->
+  <!-- Chat messages -->
+  <main id="messages" class="flex-1 overflow-y-auto p-4 space-y-2"></main>
+
+  <!-- Input box -->
+  <footer class="p-4 bg-white flex">
+    <input id="messageInput" type="text" 
+      placeholder="Type your message..." 
+      class="flex-1 border rounded-l-lg p-2 outline-none">
+    <button onclick="sendMessage()" 
+      class="bg-blue-600 text-white px-4 rounded-r-lg">Send</button>
+  </footer>
+
+  <!-- Firebase Script -->
   <script type="module">
-    // Import Firebase SDK
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-    import { getDatabase, ref, push, onChildAdded } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+    // Import Firebase SDKs
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, push, onChildAdded, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-    // ✅ Your Firebase Config (with databaseURL)
+    // Your Firebase config
     const firebaseConfig = {
-      apiKey: "AIzaSyCLUGoYW3z_BL-jufmEOrN40HLPPUHMKSI",
-      authDomain: "chat-discussion-b5009.firebaseapp.com",
-      databaseURL: "https://chat-discussion-b5009-default-rtdb.firebaseio.com",
-      projectId: "chat-discussion-b5009",
-      storageBucket: "chat-discussion-b5009.appspot.com",
-      messagingSenderId: "436514400897",
-      appId: "1:436514400897:web:e46d989a6971690470fb80"
+      apiKey: "AIzaSyADybiqP-ywI9BH4VtoF9pGk5KRNaUvvbQ",
+      authDomain: "live-chat-app-dbc12.firebaseapp.com",
+      databaseURL: "https://live-chat-app-dbc12-default-rtdb.firebaseio.com",
+      projectId: "live-chat-app-dbc12",
+      storageBucket: "live-chat-app-dbc12.appspot.com",
+      messagingSenderId: "228763841925",
+      appId: "1:228763841925:web:d2f421cc6e522c0bcfc0ec",
+      measurementId: "G-3M1GPG8Z7D"
     };
 
-    // Init Firebase
+    // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
+    const chatRef = ref(db, "messages");
+    const usersRef = ref(db, "users");
 
-    let user = {};
+    // 🔹 Check local storage
+    let username = localStorage.getItem("username");
+    let semester = localStorage.getItem("semester");
 
-    // Join Chat
-    window.joinChat = function() {
-      const name = document.getElementById("name").value;
-      const sem = document.getElementById("sem").value;
-      if (!name || !sem) return alert("Enter name & semester");
+    if (!username || !semester) {
+      // Ask semester if not saved
+      semester = prompt("Enter your semester (e.g., 1st, 2nd, 3rd):");
+      if (!semester || semester.trim() === "") semester = "Unknown";
 
-      user = { name, sem };
+      // Generate random username
+      username = "User" + Math.floor(Math.random() * 1000);
 
-      document.getElementById("login").style.display = "none";
-      document.getElementById("chat").style.display = "block";
-
-      // Notify join
-      push(ref(db, "messages"), {
-        name: "System",
-        sem: "-",
-        text: `👋 ${name} (Sem-${sem}) joined the chat`
+      // Save in Firebase users list
+      set(ref(db, "users/" + username), {
+        username: username,
+        semester: semester,
+        joinedAt: Date.now()
       });
-    };
 
-    // Send Message
+      // Save in local storage
+      localStorage.setItem("username", username);
+      localStorage.setItem("semester", semester);
+    }
+
+    // 🔹 Send message
     window.sendMessage = function() {
-      const msg = document.getElementById("message").value;
-      if (!msg) return;
-      push(ref(db, "messages"), {
-        name: user.name,
-        sem: user.sem,
-        text: msg
-      });
-      document.getElementById("message").value = "";
+      const input = document.getElementById("messageInput");
+      if (input.value.trim() !== "") {
+        push(chatRef, {
+          user: username,
+          sem: semester,
+          text: input.value,
+          time: Date.now()
+        });
+        input.value = "";
+      }
     };
 
-    // Listen for new messages
-    const messagesRef = ref(db, "messages");
-    onChildAdded(messagesRef, (snapshot) => {
-      const data = snapshot.val();
-      const chatBox = document.getElementById("chatBox");
+    // 🔹 Display messages live
+    const messagesDiv = document.getElementById("messages");
+    onChildAdded(chatRef, (data) => {
+      const msg = data.val();
       const div = document.createElement("div");
 
-      if (data.name === "System") {
-        div.classList.add("system");
-        div.innerHTML = data.text;
-      } else {
-        div.classList.add("message");
-        div.classList.add(data.name === user.name ? "me" : "other");
-        div.innerHTML = `<b>${data.name} (Sem-${data.sem}):</b> ${data.text}`;
-      }
+      // Style: my messages blue, others gray
+      div.className = "p-2 max-w-xs rounded-lg " 
+        + (msg.user === username 
+          ? "bg-blue-500 text-white ml-auto" 
+          : "bg-gray-200 text-black mr-auto");
 
-      chatBox.appendChild(div);
-      chatBox.scrollTop = chatBox.scrollHeight;
+      // Show semester + username
+      div.innerHTML = `<strong>${msg.sem} - ${msg.user}:</strong> ${msg.text}`;
+      messagesDiv.appendChild(div);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
     });
   </script>
 </body>
 </html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Chat App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex flex-col h-screen">
+
+  <!-- Header -->
+  <header class="bg-blue-600 text-white p-4 text-center text-xl font-bold shadow">
+    💬 Live Discussion Group
+  </header>
+
+  <!-- Chat messages -->
+  <main id="messages" class="flex-1 overflow-y-auto p-4 space-y-2"></main>
+
+  <!-- Input box -->
+  <footer class="p-4 bg-white flex">
+    <input id="messageInput" type="text" 
+      placeholder="Type your message..." 
+      class="flex-1 border rounded-l-lg p-2 outline-none">
+    <button onclick="sendMessage()" 
+      class="bg-blue-600 text-white px-4 rounded-r-lg">Send</button>
+  </footer>
+
+  <!-- Firebase Script -->
+  <script type="module">
+    // Import Firebase SDKs
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, push, onChildAdded, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    // Your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyADybiqP-ywI9BH4VtoF9pGk5KRNaUvvbQ",
+      authDomain: "live-chat-app-dbc12.firebaseapp.com",
+      databaseURL: "https://live-chat-app-dbc12-default-rtdb.firebaseio.com",
+      projectId: "live-chat-app-dbc12",
+      storageBucket: "live-chat-app-dbc12.appspot.com",
+      messagingSenderId: "228763841925",
+      appId: "1:228763841925:web:d2f421cc6e522c0bcfc0ec",
+      measurementId: "G-3M1GPG8Z7D"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const chatRef = ref(db, "messages");
+    const usersRef = ref(db, "users");
+
+    // 🔹 Check local storage
+    let username = localStorage.getItem("username");
+    let semester = localStorage.getItem("semester");
+
+    if (!username || !semester) {
+      // Ask semester if not saved
+      semester = prompt("Enter your semester (e.g., 1st, 2nd, 3rd):");
+      if (!semester || semester.trim() === "") semester = "Unknown";
+
+      // Generate random username
+      username = "User" + Math.floor(Math.random() * 1000);
+
+      // Save in Firebase users list
+      set(ref(db, "users/" + username), {
+        username: username,
+        semester: semester,
+        joinedAt: Date.now()
+      });
+
+      // Save in local storage
+      localStorage.setItem("username", username);
+      localStorage.setItem("semester", semester);
+    }
+
+    // 🔹 Send message
+    window.sendMessage = function() {
+      const input = document.getElementById("messageInput");
+      if (input.value.trim() !== "") {
+        push(chatRef, {
+          user: username,
+          sem: semester,
+          text: input.value,
+          time: Date.now()
+        });
+        input.value = "";
+      }
+    };
+
+    // 🔹 Display messages live
+    const messagesDiv = document.getElementById("messages");
+    onChildAdded(chatRef, (data) => {
+      const msg = data.val();
+      const div = document.createElement("div");
+
+      // Style: my messages blue, others gray
+      div.className = "p-2 max-w-xs rounded-lg " 
+        + (msg.user === username 
+          ? "bg-blue-500 text-white ml-auto" 
+          : "bg-gray-200 text-black mr-auto");
+
+      // Show semester + username
+      div.innerHTML = `<strong>${msg.sem} - ${msg.user}:</strong> ${msg.text}`;
+      messagesDiv.appendChild(div);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+  </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Chat App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex flex-col h-screen">
+
+  <!-- Header -->
+  <header class="bg-blue-600 text-white p-4 text-center text-xl font-bold shadow">
+    💬 Live Discussion Group
+  </header>
+
+  <!-- Chat messages -->
+  <main id="messages" class="flex-1 overflow-y-auto p-4 space-y-2"></main>
+
+  <!-- Input box -->
+  <footer class="p-4 bg-white flex">
+    <input id="messageInput" type="text" 
+      placeholder="Type your message..." 
+      class="flex-1 border rounded-l-lg p-2 outline-none">
+    <button onclick="sendMessage()" 
+      class="bg-blue-600 text-white px-4 rounded-r-lg">Send</button>
+  </footer>
+
+  <!-- Firebase Script -->
+  <script type="module">
+    // Import Firebase SDKs
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, push, onChildAdded, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    // Your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyADybiqP-ywI9BH4VtoF9pGk5KRNaUvvbQ",
+      authDomain: "live-chat-app-dbc12.firebaseapp.com",
+      databaseURL: "https://live-chat-app-dbc12-default-rtdb.firebaseio.com",
+      projectId: "live-chat-app-dbc12",
+      storageBucket: "live-chat-app-dbc12.appspot.com",
+      messagingSenderId: "228763841925",
+      appId: "1:228763841925:web:d2f421cc6e522c0bcfc0ec",
+      measurementId: "G-3M1GPG8Z7D"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const chatRef = ref(db, "messages");
+    const usersRef = ref(db, "users");
+
+    // 🔹 Check local storage
+    let username = localStorage.getItem("username");
+    let semester = localStorage.getItem("semester");
+
+    if (!username || !semester) {
+      // Ask semester if not saved
+      semester = prompt("Enter your semester (e.g., 1st, 2nd, 3rd):");
+      if (!semester || semester.trim() === "") semester = "Unknown";
+
+      // Generate random username
+      username = "User" + Math.floor(Math.random() * 1000);
+
+      // Save in Firebase users list
+      set(ref(db, "users/" + username), {
+        username: username,
+        semester: semester,
+        joinedAt: Date.now()
+      });
+
+      // Save in local storage
+      localStorage.setItem("username", username);
+      localStorage.setItem("semester", semester);
+    }
+
+    // 🔹 Send message
+    window.sendMessage = function() {
+      const input = document.getElementById("messageInput");
+      if (input.value.trim() !== "") {
+        push(chatRef, {
+          user: username,
+          sem: semester,
+          text: input.value,
+          time: Date.now()
+        });
+        input.value = "";
+      }
+    };
+
+    // 🔹 Display messages live
+    const messagesDiv = document.getElementById("messages");
+    onChildAdded(chatRef, (data) => {
+      const msg = data.val();
+      const div = document.createElement("div");
+
+      // Style: my messages blue, others gray
+      div.className = "p-2 max-w-xs rounded-lg " 
+        + (msg.user === username 
+          ? "bg-blue-500 text-white ml-auto" 
+          : "bg-gray-200 text-black mr-auto");
+
+      // Show semester + username
+      div.innerHTML = `<strong>${msg.sem} - ${msg.user}:</strong> ${msg.text}`;
+      messagesDiv.appendChild(div);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+  </script>
+</body>
+</html>
+
