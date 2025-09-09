@@ -9,27 +9,54 @@
 <body class="bg-gray-100 flex flex-col h-screen">
 
   <!-- Header -->
-  <header class="bg-blue-600 text-white p-4 text-center text-xl font-bold shadow">
-              BCA
-    💬 Live Discussion Group
+  <header class="bg-blue-600 text-white p-4 text-xl font-bold shadow flex justify-between items-center">
+    <span>💬 Live Discussion Group</span>
+    <div class="flex items-center space-x-2">
+      <!-- Toggle Users Sidebar (only on mobile) -->
+      <button id="toggleUsers" class="bg-gray-200 text-blue-600 px-2 py-1 rounded md:hidden">
+        👥 Users
+      </button>
+      <!-- Admin controls -->
+      <span id="adminControls" class="hidden space-x-2">
+        <button onclick="clearChat()" class="bg-red-600 px-2 py-1 rounded">🗑 Clear Chat</button>
+      </span>
+    </div>
   </header>
 
-  <!-- Chat messages -->
-  <main id="messages" class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50"></main>
+  <!-- Main Layout -->
+  <div class="flex flex-1">
+
+    <!-- Active Users Sidebar -->
+    <aside id="usersSidebar" class="w-2/3 md:w-1/4 bg-gray-200 p-3 border-r overflow-y-auto fixed md:static top-0 left-0 h-full z-50 transform -translate-x-full md:translate-x-0 transition-transform">
+      <h2 class="font-bold mb-2 flex justify-between items-center">
+        👥 Active Users 
+        <button id="closeUsers" class="md:hidden text-red-600 font-bold">✖</button>
+      </h2>
+      <ul id="usersList" class="space-y-2"></ul>
+    </aside>
+
+    <!-- Chat Area -->
+    <main id="messages" class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50"></main>
+  </div>
 
   <!-- Input box -->
-  <footer class="p-4 bg-white flex border-t">
+  <div class="p-4 bg-white flex border-t">
     <input id="messageInput" type="text" 
       placeholder="Type your message..." 
       class="flex-1 border rounded-l-lg p-2 outline-none">
     <button onclick="sendMessage()" 
       class="bg-blue-600 text-white px-4 rounded-r-lg">Send</button>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-gray-800 text-white text-center p-2 text-sm">
+    © 2025 mjkbca.online | Live Discussion Group
   </footer>
 
   <!-- Firebase Script -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, push, onChildAdded, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getDatabase, ref, push, onChildAdded, set, remove, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyADybiqP-ywI9BH4VtoF9pGk5KRNaUvvbQ",
@@ -47,23 +74,47 @@
     const chatRef = ref(db, "messages");
     const usersRef = ref(db, "users");
 
-    // 🔹 Ask once & save
+    // 🔹 Admin Password
+    const ADMIN_PASS = "RAVI@123";
+
     let username = localStorage.getItem("username");
     let semester = localStorage.getItem("semester");
+    let isAdmin = false;
 
-    if (!username || !semester) {
-      semester = prompt("Enter your semester (e.g., 1st, 2nd, 3rd):") || "Unknown";
-      username = "User" + Math.floor(Math.random() * 1000);
-
-      set(ref(db, "users/" + username), {
-        username: username,
-        semester: semester,
-        joinedAt: Date.now()
-      });
+    // 🔹 Ask login or register
+    if (!username) {
+      const wantsAdmin = confirm("Are you admin?");
+      if (wantsAdmin) {
+        const pass = prompt("Enter admin password:");
+        if (pass === ADMIN_PASS) {
+          username = "Admin";
+          semester = "ADMIN";
+          isAdmin = true;
+          document.getElementById("adminControls").classList.remove("hidden");
+        } else {
+          alert("Wrong admin password!");
+          username = "User" + Math.floor(Math.random() * 1000);
+          semester = prompt("Enter your semester (e.g., 1st, 2nd, 3rd):") || "Unknown";
+        }
+      } else {
+        semester = prompt("Enter your semester (e.g., 1st, 2nd, 3rd):") || "Unknown";
+        username = "User" + Math.floor(Math.random() * 1000);
+      }
 
       localStorage.setItem("username", username);
       localStorage.setItem("semester", semester);
     }
+
+    // 🔹 Save/update user status
+    function updateUserStatus() {
+      set(ref(db, "users/" + username), {
+        username: username,
+        semester: semester,
+        lastSeen: Date.now()
+      });
+    }
+    updateUserStatus();
+    setInterval(updateUserStatus, 30000); // update every 30 sec
 
     // 🔹 Send message
     window.sendMessage = function() {
@@ -94,12 +145,67 @@
       messagesDiv.appendChild(div);
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     });
+
+    // 🔹 Admin: Clear chat
+    window.clearChat = function() {
+      remove(chatRef);
+      messagesDiv.innerHTML = "";
+      alert("Chat cleared by Admin");
+    };
+
+    // 🔹 Admin: Remove user
+    window.removeUser = function(user) {
+      remove(ref(db, "users/" + user));
+      alert("User " + user + " removed!");
+    };
+
+    // 🔹 Auto-clear every 30 min
+    setInterval(() => {
+      remove(chatRef);
+      messagesDiv.innerHTML = "";
+      console.log("Chat auto-cleared every 30 min");
+    }, 30 * 60 * 1000);
+
+    // 🔹 Update users list
+    const usersList = document.getElementById("usersList");
+    onValue(usersRef, (snapshot) => {
+      usersList.innerHTML = "";
+      const users = snapshot.val();
+      if (users) {
+        Object.keys(users).forEach((key) => {
+          const user = users[key];
+          const li = document.createElement("li");
+          li.className = "flex justify-between items-center bg-white p-2 rounded shadow";
+
+          const now = Date.now();
+          const online = user.lastSeen && (now - user.lastSeen < 120000); // 2 min
+          const statusDot = online 
+            ? "<span class='text-green-500'>●</span>" 
+            : "<span class='text-gray-400'>●</span>";
+
+          li.innerHTML = `<span>${statusDot} ${user.semester} - ${user.username}</span>`;
+          
+          if (isAdmin && user.username !== "Admin") {
+            const btn = document.createElement("button");
+            btn.innerText = "❌";
+            btn.className = "text-red-600 font-bold ml-2";
+            btn.onclick = () => removeUser(user.username);
+            li.appendChild(btn);
+          }
+
+          usersList.appendChild(li);
+        });
+      }
+    });
+
+    // 🔹 Sidebar toggle for mobile
+    const usersSidebar = document.getElementById("usersSidebar");
+    document.getElementById("toggleUsers").addEventListener("click", () => {
+      usersSidebar.classList.remove("-translate-x-full");
+    });
+    document.getElementById("closeUsers").addEventListener("click", () => {
+      usersSidebar.classList.add("-translate-x-full");
+    });
   </script>
 </body>
 </html>
-<!-- Footer -->
-<footer class="bg-gray-800 text-white text-center p-3 text-sm">
-  © 2025 mjkbca.online | All Rights Reserved
-</footer>
-
-
