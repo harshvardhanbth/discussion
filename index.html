@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Chat App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex flex-col h-screen">
+
+  <!-- Header -->
+  <header class="bg-blue-600 text-white p-4 text-center text-xl font-bold shadow">
+    💬 Live Discussion Group
+  </header>
+
+  <!-- Chat messages -->
+  <main id="messages" class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50"></main>
+
+  <!-- Input box -->
+  <footer class="p-4 bg-white flex border-t">
+    <input id="messageInput" type="text" 
+      placeholder="Type your message..." 
+      class="flex-1 border rounded-l-lg p-2 outline-none">
+    <button onclick="sendMessage()" 
+      class="bg-blue-600 text-white px-4 rounded-r-lg">Send</button>
+  </footer>
+
+  <!-- Firebase Script -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, push, onChildAdded, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyADybiqP-ywI9BH4VtoF9pGk5KRNaUvvbQ",
+      authDomain: "live-chat-app-dbc12.firebaseapp.com",
+      databaseURL: "https://live-chat-app-dbc12-default-rtdb.firebaseio.com",
+      projectId: "live-chat-app-dbc12",
+      storageBucket: "live-chat-app-dbc12.appspot.com",
+      messagingSenderId: "228763841925",
+      appId: "1:228763841925:web:d2f421cc6e522c0bcfc0ec",
+      measurementId: "G-3M1GPG8Z7D"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const chatRef = ref(db, "messages");
+    const usersRef = ref(db, "users");
+
+    // 🔹 Ask once & save
+    let username = localStorage.getItem("username");
+    let semester = localStorage.getItem("semester");
+
+    if (!username || !semester) {
+      semester = prompt("Enter your semester (e.g., 1st, 2nd, 3rd):") || "Unknown";
+      username = "User" + Math.floor(Math.random() * 1000);
+
+      set(ref(db, "users/" + username), {
+        username: username,
+        semester: semester,
+        joinedAt: Date.now()
+      });
+
+      localStorage.setItem("username", username);
+      localStorage.setItem("semester", semester);
+    }
+
+    // 🔹 Send message
+    window.sendMessage = function() {
+      const input = document.getElementById("messageInput");
+      if (input.value.trim() !== "") {
+        push(chatRef, {
+          user: username,
+          sem: semester,
+          text: input.value,
+          time: Date.now()
+        });
+        input.value = "";
+      }
+    };
+
+    // 🔹 Display messages
+    const messagesDiv = document.getElementById("messages");
+    onChildAdded(chatRef, (data) => {
+      const msg = data.val();
+      const div = document.createElement("div");
+
+      div.className = "p-2 max-w-xs rounded-lg break-words " 
+        + (msg.user === username 
+          ? "bg-blue-500 text-white ml-auto" 
+          : "bg-gray-200 text-black mr-auto");
+
+      div.innerHTML = `<strong>${msg.sem} - ${msg.user}:</strong> ${msg.text}`;
+      messagesDiv.appendChild(div);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+  </script>
+</body>
+</html>
